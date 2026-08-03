@@ -17,8 +17,15 @@ class ConnectionManager:
         self.active_connections.remove(websocket)
 
     async def send_broadcast_message(self, message: str):
-        for connections in self.active_connections:
-            await connections.send_text(message)
+        dead = []
+
+        for connection in self.active_connections:
+            try:
+                await connection.send_text(message)
+            except Exception:
+                dead.append(connection)
+        for connection in dead:
+            self.active_connections.remove(connection)
 
 
 manager = ConnectionManager()
@@ -32,13 +39,23 @@ async def homepage():
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     await manager.connect(websocket)
+    await manager.send_broadcast_message(f"{websocket.client} has connected")
+
+    sender_name = "Someone"
     try:
         while True:
-            data = await websocket.receive_json()
+
+            try:
+                data = await websocket.receive_json()
+            except ValueError:
+                continue
+            if not isinstance(data, dict):
+                continue
+
             sender_name = data.get("name")
             message_text = data.get("message")
             broadcast = f"{sender_name} sent :{message_text}"
             await manager.send_broadcast_message(broadcast)
     except WebSocketDisconnect:
         await manager.disconnect(websocket)
-        await manager.send_broadcast_message(f"Client has disconnected")
+        await manager.send_broadcast_message(f"{sender_name} has disconnected")
