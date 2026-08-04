@@ -17,3 +17,7 @@ class UserRead(BaseModel):
 class Token(BaseModel):
     token: str
     type: str
+
+
+class Tokendata(BaseModel):
+    sub: str

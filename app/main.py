@@ -3,9 +3,7 @@ from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse
 from sqlalchemy import select
 from app.dependencies.index import html
-from .database.setup import get_db, create_db, dispose, AsyncSession
-from typing import Annotated
-from fastapi import Depends
+from .database.setup import get_db, create_db, dispose, AsyncSession, SessionDependency
 from .database.models import User
 from .database.schemas import UserCreate, UserRead
 from fastapi import status
@@ -23,12 +21,10 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
-SessionDependency = Annotated[AsyncSession, Depends(get_db)]
-
 
 @app.post("/register", response_model=UserRead, status_code=201)
 async def register_user(user: UserCreate, session: SessionDependency):
-    query = select(User).where(User.name == user.name)
+    query = select(User).where(User.username == user.name)
     result = await session.execute(query)
     existing_user = result.scalar_one_or_none()
 

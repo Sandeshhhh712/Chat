@@ -8,7 +8,7 @@ class User(Base):
     __tablename__ = "User"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    name: Mapped[str] = mapped_column(String(30), unique=True)
+    username: Mapped[str] = mapped_column(String(30), unique=True)
     password: Mapped[str]
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
