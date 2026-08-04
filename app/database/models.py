@@ -5,6 +5,8 @@ from .setup import Base
 
 
 class User(Base):
+    __tablename__ = "User"
+
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(30), unique=True)
     password: Mapped[str]
@@ -17,5 +19,7 @@ class User(Base):
 
 
 class Chatroom(Base):
+    __tablename__ = "Chatroom"
+
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(30))

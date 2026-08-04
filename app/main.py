@@ -1,8 +1,53 @@
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from contextlib import asynccontextmanager
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse
+from sqlalchemy import select
 from app.dependencies.index import html
+from .database.setup import get_db, create_db, dispose, AsyncSession
+from typing import Annotated
+from fastapi import Depends
+from .database.models import User
+from .database.schemas import UserCreate, UserRead
+from fastapi import status
+from .database.auth import get_password_hash
 
-app = FastAPI()
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    print("Server is starting...")
+    await create_db()
+    yield
+    print("Server is closing...")
+    await dispose()
+
+
+app = FastAPI(lifespan=lifespan)
+
+SessionDependency = Annotated[AsyncSession, Depends(get_db)]
+
+
+@app.post("/register", response_model=UserRead, status_code=201)
+async def register_user(user: UserCreate, session: SessionDependency):
+    query = select(User).where(User.name == user.name)
+    result = await session.execute(query)
+    existing_user = result.scalar_one_or_none()
+
+    if existing_user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Username already exists"
+        )
+
+    hashed_password = get_password_hash(user.password)
+
+    new_user = User(
+        name=user.name,
+        password=hashed_password,
+    )
+
+    session.add(new_user)
+    await session.commit()
+    await session.refresh(new_user)
+    return new_user
 
 
 class ConnectionManager:
