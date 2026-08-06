@@ -3,21 +3,17 @@ from datetime import datetime
 
 
 class UserCreate(BaseModel):
-    name: str
+    username: str
     password: str
 
 
 class UserRead(BaseModel):
     id: int
-    name: str
+    username: str
     created_at: datetime
     updated_at: datetime
 
 
 class Token(BaseModel):
-    token: str
+    access_token: str
     type: str
-
-
-class Tokendata(BaseModel):
-    sub: str

@@ -10,7 +10,7 @@ class Base(DeclarativeBase):
 
 DATABASE_URL = "postgresql+asyncpg://postgres:password@localhost/chatapp"
 
-engine = create_async_engine(DATABASE_URL, echo=True)
+engine = create_async_engine(DATABASE_URL, echo=False)
 
 AsyncSessionLocal = async_sessionmaker(
     bind=engine,

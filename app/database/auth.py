@@ -5,8 +5,6 @@ from fastapi import Depends, HTTPException, status
 from pwdlib import PasswordHash
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy import select
-from sqlalchemy.sql.functions import user
-
 from .models import User
 from .setup import SessionDependency
 
@@ -30,28 +28,25 @@ oauth2scheme = OAuth2PasswordBearer(tokenUrl="token")
 # Login Auth
 
 
-def get_user(session: SessionDependency, username: str) -> User | None:
+async def get_user(session: SessionDependency, username: str) -> User | None:
     user = select(User).where(User.username == username)
-    return session.scalar(user)
+    return await session.scalar(user)
 
 
-def authenticate_user(
+async def authenticate_user(
     session: SessionDependency, username: str, password: str
 ) -> User | None:
-    credential_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Check credentials before trying again",
-    )
-    user = get_user(session, username)
+    user = await get_user(session, username)
     if user is None:
-        raise credential_exception
+        return None
     if not verify_password(password, user.password):
-        raise credential_exception
+        return None
     return user
 
 
-def create_access_token(data: Mapping[str, Any], expire_delta: timedelta | None = None):
-    payload = data.get("sub")
+async def create_access_token(
+    data: Mapping[str, Any], expire_delta: timedelta | None = None
+):
     if "sub" not in data:
         raise ValueError("Invalid Payload")
 
@@ -65,21 +60,22 @@ def create_access_token(data: Mapping[str, Any], expire_delta: timedelta | None 
     return jwt.encode(payload, SECRET_KEY, ALGORITHM)
 
 
-def get_current_user(
+async def get_current_user(
     token: Annotated[str, Depends(oauth2scheme)], session: SessionDependency
 ) -> User | None:
     credential_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Check credentials before trying again",
+        headers={"WWW-Authenticate": "Bearer"},
     )
     try:
-        payload = jwt.decode(token, SECRET_KEY, ALGORITHM)
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         username = payload.get("sub")
         if username is None:
             raise credential_exception
     except jwt.InvalidTokenError:
         raise credential_exception
-    user = get_user(session, username)
-    if not user:
+    user = await get_user(session, username)
+    if user is None:
         raise credential_exception
     return user

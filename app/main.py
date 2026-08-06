@@ -1,13 +1,24 @@
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from contextvars import Token
+from datetime import timedelta
+from typing import Annotated
+from fastapi import Depends, FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse
 from sqlalchemy import select
+from sqlalchemy.util import unbound_method_to_callable
 from app.dependencies.index import html
-from .database.setup import get_db, create_db, dispose, AsyncSession, SessionDependency
+from .database.setup import get_db, create_db, dispose, SessionDependency
 from .database.models import User
-from .database.schemas import UserCreate, UserRead
+from .database.schemas import UserCreate, UserRead, Token
 from fastapi import status
-from .database.auth import get_password_hash
+from .database.auth import (
+    ACCESS_TOKEN_EXPIRE_MINUTES,
+    authenticate_user,
+    create_access_token,
+    get_password_hash,
+)
+from fastapi.security import OAuth2PasswordRequestForm
+from .database.auth import oauth2scheme
 
 
 @asynccontextmanager
@@ -22,9 +33,30 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 
 
+@app.post("/token")
+async def login_token(
+    form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
+    session: SessionDependency,
+) -> Token:
+    username = form_data.username
+    password = form_data.password
+    user = await authenticate_user(session, username=username, password=password)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Check credentials before trying again",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = await create_access_token(
+        data={"sub": user.username}, expire_delta=access_token_expires
+    )
+    return Token(access_token=access_token, type="bearer")
+
+
 @app.post("/register", response_model=UserRead, status_code=201)
 async def register_user(user: UserCreate, session: SessionDependency):
-    query = select(User).where(User.username == user.name)
+    query = select(User).where(User.username == user.username)
     result = await session.execute(query)
     existing_user = result.scalar_one_or_none()
 
@@ -35,10 +67,7 @@ async def register_user(user: UserCreate, session: SessionDependency):
 
     hashed_password = get_password_hash(user.password)
 
-    new_user = User(
-        name=user.name,
-        password=hashed_password,
-    )
+    new_user = User(username=user.username, password=hashed_password)
 
     session.add(new_user)
     await session.commit()
