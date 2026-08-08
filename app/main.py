@@ -1,13 +1,11 @@
 from contextlib import asynccontextmanager
 from contextvars import Token
 from datetime import timedelta
-from typing import Annotated
 from fastapi import Depends, FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse
 from sqlalchemy import select
-from sqlalchemy.util import unbound_method_to_callable
 from app.dependencies.index import html
-from .database.setup import get_db, create_db, dispose, SessionDependency
+from .database.setup import create_db, dispose, SessionDependency
 from .database.models import User
 from .database.schemas import UserCreate, UserRead, Token
 from fastapi import status
@@ -15,10 +13,13 @@ from .database.auth import (
     ACCESS_TOKEN_EXPIRE_MINUTES,
     authenticate_user,
     create_access_token,
+    get_current_user,
+    validate_user_ws,
     get_password_hash,
 )
+from typing import Annotated
 from fastapi.security import OAuth2PasswordRequestForm
-from .database.auth import oauth2scheme
+import asyncio
 
 
 @asynccontextmanager
@@ -80,7 +81,6 @@ class ConnectionManager:
         self.active_connections: list[WebSocket] = []
 
     async def connect(self, websocket: WebSocket):
-        await websocket.accept()
         self.active_connections.append(websocket)
 
     async def disconnect(self, websocket: WebSocket):
@@ -97,6 +97,9 @@ class ConnectionManager:
         for connection in dead:
             self.active_connections.remove(connection)
 
+    async def send_message_to_user(self, message: str, user: str):
+        pass
+
 
 manager = ConnectionManager()
 
@@ -107,11 +110,26 @@ async def homepage():
 
 
 @app.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket):
+async def websocket_endpoint(websocket: WebSocket, session: SessionDependency):
+    await websocket.accept()
+
+    try:
+        auth_data = await asyncio.wait_for(websocket.receive_json(), timeout=5.0)
+    except (asyncio.TimeoutError, ValueError):
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        return
+
+    token = auth_data.get("token")
+    current_user = await validate_user_ws(token, session)
+
+    if current_user is None:
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        return
+
     await manager.connect(websocket)
     await manager.send_broadcast_message(f"{websocket.client} has connected")
 
-    sender_name = "Someone"
+    sender_name = current_user.username
     try:
         while True:
 
@@ -121,8 +139,6 @@ async def websocket_endpoint(websocket: WebSocket):
                 continue
             if not isinstance(data, dict):
                 continue
-
-            sender_name = data.get("name")
             message_text = data.get("message")
             broadcast = f"{sender_name} sent :{message_text}"
             await manager.send_broadcast_message(broadcast)

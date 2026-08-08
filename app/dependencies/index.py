@@ -6,7 +6,6 @@ html = """
     </head>
     <body>
         <h1>WebSocket Chat</h1>
-        <input type="text" id="name"/>
         <form action="" onsubmit="sendMessage(event)">
             <input type="text" id="messageText" autocomplete="off"/>
             <button>Send</button>
@@ -24,9 +23,7 @@ html = """
             };
             function sendMessage(event) {
                 var input = document.getElementById("messageText");
-                var nameInput = document.getElementById("name");
                 var dict = {
-                    name:nameInput.value,
                     message:input.value
                 };
                 const Jsondict = JSON.stringify(dict);
