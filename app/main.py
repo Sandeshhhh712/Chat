@@ -91,7 +91,7 @@ class ConnectionManager:
 
         for connection in self.active_connections:
             try:
-                await connection.send_text(message)
+                await connection.send_json(message)
             except Exception:
                 dead.append(connection)
         for connection in dead:
@@ -100,6 +100,8 @@ class ConnectionManager:
     async def send_message_to_user(self, message: str, user: str):
         pass
 
+
+# Login garne and pass that token so that it can be used for my custom websocket security logic
 
 manager = ConnectionManager()
 
@@ -118,10 +120,12 @@ async def websocket_endpoint(websocket: WebSocket, session: SessionDependency):
     except (asyncio.TimeoutError, ValueError):
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         return
+    except WebSocketDisconnect:
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        return
 
     token = auth_data.get("token")
     current_user = await validate_user_ws(token, session)
-
     if current_user is None:
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         return
@@ -132,7 +136,6 @@ async def websocket_endpoint(websocket: WebSocket, session: SessionDependency):
     sender_name = current_user.username
     try:
         while True:
-
             try:
                 data = await websocket.receive_json()
             except ValueError:
