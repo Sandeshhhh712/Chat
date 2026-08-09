@@ -1,5 +1,4 @@
 from contextlib import asynccontextmanager
-from contextvars import Token
 from datetime import timedelta
 from fastapi import Depends, FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse
@@ -52,7 +51,7 @@ async def login_token(
     access_token = await create_access_token(
         data={"sub": user.username}, expire_delta=access_token_expires
     )
-    return Token(access_token=access_token, type="bearer")
+    return Token(access_token=access_token, token_type="bearer")
 
 
 @app.post("/register", response_model=UserRead, status_code=201)

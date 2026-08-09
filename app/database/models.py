@@ -23,3 +23,13 @@ class Chatroom(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(30))
+
+
+class Message(Base):
+    __tablename__ = "Message"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    content: Mapped[str]
+    timestamp: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )
