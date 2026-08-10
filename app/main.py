@@ -110,6 +110,9 @@ async def homepage():
     return HTMLResponse(html)
 
 
+# me alxi
+
+
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket, session: SessionDependency):
     await websocket.accept()
