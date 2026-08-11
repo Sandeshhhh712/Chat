@@ -1,10 +1,7 @@
 from datetime import datetime, timedelta, timezone
-from functools import partial
 from typing import Annotated, Any, Mapping
 import jwt
-from fastapi import WebSocket
 from fastapi import Depends, HTTPException, status
-from jwt.algorithms import Algorithm
 from pwdlib import PasswordHash
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy import select
@@ -88,7 +85,6 @@ async def validate_user_ws(token: str, session: SessionDependency) -> User | Non
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
     except jwt.InvalidTokenError:
-        print("JWT bigryo")
         return None
     username = payload.get("sub")
     if username is None:

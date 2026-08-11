@@ -3,6 +3,7 @@ from datetime import timedelta
 from fastapi import Depends, FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse
 from sqlalchemy import select
+from app.dependencies.dependecies import get_chatroom
 from app.dependencies.index import html
 from .database.setup import create_db, dispose, SessionDependency
 from .database.models import User
@@ -13,6 +14,7 @@ from .database.auth import (
     authenticate_user,
     create_access_token,
     get_current_user,
+    get_user,
     validate_user_ws,
     get_password_hash,
 )
@@ -96,11 +98,17 @@ class ConnectionManager:
         for connection in dead:
             self.active_connections.remove(connection)
 
-    async def send_message_to_user(self, message: str, user: str):
-        pass
 
+class User_Handler:
 
-# Login garne and pass that token so that it can be used for my custom websocket security logic
+    def add_user_to_chatroom(
+        self, session: SessionDependency, username: str, chatroom: str
+    ) -> User | None:
+        user = get_user(session, username)
+        chat = get_chatroom(session, chatroom)
+        if not chat and user:
+            return None
+
 
 manager = ConnectionManager()
 
@@ -108,9 +116,6 @@ manager = ConnectionManager()
 @app.get("/")
 async def homepage():
     return HTMLResponse(html)
-
-
-# me alxi
 
 
 @app.websocket("/ws")
