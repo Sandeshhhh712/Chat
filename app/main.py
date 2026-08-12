@@ -4,7 +4,6 @@ from fastapi import Depends, FastAPI, HTTPException, WebSocket, WebSocketDisconn
 from fastapi.responses import HTMLResponse
 from sqlalchemy import select
 from app.dependencies.dependecies import get_chatroom
-from app.dependencies.index import html
 from .database.setup import create_db, dispose, SessionDependency
 from .database.models import User
 from .database.schemas import UserCreate, UserRead, Token
@@ -21,6 +20,10 @@ from .database.auth import (
 from typing import Annotated
 from fastapi.security import OAuth2PasswordRequestForm
 import asyncio
+from fastapi import Request
+from fastapi.templating import Jinja2Templates
+
+templates = Jinja2Templates(directory="templates")
 
 
 @asynccontextmanager
@@ -77,23 +80,28 @@ async def register_user(user: UserCreate, session: SessionDependency):
     return new_user
 
 
+@app.get("/")
+async def login_page(request: Request):
+    return templates.TemplateResponse(request, "login.html")
+
+
 class ConnectionManager:
     def __init__(self):
         self.active_connections: list[WebSocket] = []
 
     async def connect(self, websocket: WebSocket):
-        self.active_connections.append(websocket)
+        if websocket not in self.active_connections:
+            self.active_connections.append(websocket)
 
     async def disconnect(self, websocket: WebSocket):
         self.active_connections.remove(websocket)
 
     async def send_broadcast_message(self, message: str):
         dead = []
-
         for connection in self.active_connections:
             try:
-                await connection.send_json(message)
-            except Exception:
+                await connection.send_text(message)
+            except (Exception, WebSocketDisconnect):
                 dead.append(connection)
         for connection in dead:
             self.active_connections.remove(connection)
@@ -111,11 +119,6 @@ class User_Handler:
 
 
 manager = ConnectionManager()
-
-
-@app.get("/")
-async def homepage():
-    return HTMLResponse(html)
 
 
 @app.websocket("/ws")
@@ -138,20 +141,13 @@ async def websocket_endpoint(websocket: WebSocket, session: SessionDependency):
         return
 
     await manager.connect(websocket)
-    await manager.send_broadcast_message(f"{websocket.client} has connected")
 
-    sender_name = current_user.username
     try:
         while True:
             try:
-                data = await websocket.receive_json()
+                data = await websocket.receive_text()
             except ValueError:
                 continue
-            if not isinstance(data, dict):
-                continue
-            message_text = data.get("message")
-            broadcast = f"{sender_name} sent :{message_text}"
-            await manager.send_broadcast_message(broadcast)
+            await manager.send_broadcast_message(data)
     except WebSocketDisconnect:
         await manager.disconnect(websocket)
-        await manager.send_broadcast_message(f"{sender_name} has disconnected")

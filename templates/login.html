@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>WebSocket Test</title>
+<style>
+  body { font-family: monospace; max-width: 500px; margin: 40px auto; padding: 0 10px; }
+  input, button { font-family: inherit; font-size: 14px; padding: 6px; margin: 4px 0; }
+  input[type=text], input[type=password] { width: 100%; box-sizing: border-box; }
+  #login-error { color: #c00; margin-top: 6px; }
+  #ws-status { margin: 8px 0; font-weight: bold; }
+  #messages { border: 1px solid #999; height: 220px; overflow-y: auto; padding: 6px; background: #fafafa; }
+  #messages p { margin: 2px 0; }
+  .row { display: flex; gap: 6px; }
+  .row input { flex: 1; }
+</style>
+</head>
+<body>
+
+<div id="login-section">
+  <h2>Login</h2>
+  <form id="login-form">
+    <input type="text" id="username" placeholder="Username" autocomplete="username" required>
+    <input type="password" id="password" placeholder="Password" autocomplete="current-password" required>
+    <button type="submit">Login</button>
+  </form>
+  <div id="login-error"></div>
+</div>
+
+<div id="ws-section" style="display:none;">
+  <h2>WebSocket Test</h2>
+  <div class="row">
+    <input type="text" id="ws-path" value="/ws">
+    <button id="connect-btn">Connect</button>
+  </div>
+  <div id="ws-status">Not connected</div>
+  <div id="messages"></div>
+  <div class="row">
+    <input type="text" id="msg-input" placeholder="Type a message" disabled>
+    <button id="send-btn" disabled>Send</button>
+  </div>
+</div>
+
+<script>
+let accessToken = null;
+let socket = null;
+
+// --- Step 1: log in against /token (OAuth2PasswordRequestForm expects
+// application/x-www-form-urlencoded with "username" and "password") ---
+document.getElementById('login-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const username = document.getElementById('username').value;
+  const password = document.getElementById('password').value;
+  const errorDiv = document.getElementById('login-error');
+  errorDiv.textContent = '';
+
+  const body = new URLSearchParams();
+  body.append('username', username);
+  body.append('password', password);
+
+  try {
+    const resp = await fetch('/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: body.toString()
+    });
+
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      errorDiv.textContent = err.detail || `Login failed (${resp.status})`;
+      return;
+    }
+
+    const data = await resp.json(); // { access_token, token_type }
+    accessToken = data.access_token;
+    document.getElementById('login-section').style.display = 'none';
+    document.getElementById('ws-section').style.display = 'block';
+  } catch (err) {
+    errorDiv.textContent = 'Network error: ' + err.message;
+  }
+});
+
+// --- Step 2: connect and send the JWT as the first message ---
+document.getElementById('connect-btn').addEventListener('click', () => {
+  const path = document.getElementById('ws-path').value;
+  const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
+  const url = `${protocol}://${window.location.host}${path}`;
+
+  const statusDiv = document.getElementById('ws-status');
+  const msgInput = document.getElementById('msg-input');
+  const sendBtn = document.getElementById('send-btn');
+
+  statusDiv.textContent = 'Connecting to ' + url + ' ...';
+  socket = new WebSocket(url);
+
+  socket.onopen = () => {
+    statusDiv.textContent = 'Connected — sent auth token';
+    // Sending the raw token string as the first message.
+    // If your server expects a JSON envelope instead, swap this for:
+    socket.send(JSON.stringify({ token: accessToken }));
+    msgInput.disabled = false;
+    sendBtn.disabled = false;
+  };
+
+  socket.onmessage = (event) => logMessage('Server: ' + event.data);
+
+  socket.onclose = (event) => {
+    statusDiv.textContent = `Disconnected (code ${event.code})`;
+    msgInput.disabled = true;
+    sendBtn.disabled = true;
+  };
+
+  socket.onerror = () => { statusDiv.textContent = 'WebSocket error'; };
+});
+
+document.getElementById('send-btn').addEventListener('click', sendMessage);
+document.getElementById('msg-input').addEventListener('keypress', (e) => {
+  if (e.key === 'Enter') sendMessage();
+});
+
+function sendMessage() {
+  const input = document.getElementById('msg-input');
+  const text = input.value.trim();
+  if (!text || !socket || socket.readyState !== WebSocket.OPEN) return;
+  socket.send(text);
+  logMessage('You: ' + text);
+  input.value = '';
+}
+
+function logMessage(text) {
+  const messages = document.getElementById('messages');
+  const p = document.createElement('p');
+  p.textContent = text;
+  messages.appendChild(p);
+  messages.scrollTop = messages.scrollHeight;
+}
+</script>
+</body>
+</html>

@@ -12,9 +12,11 @@ class User(Base):
     username: Mapped[str] = mapped_column(String(30), unique=True)
     password: Mapped[str] = mapped_column(String(255))
 
-    message: Mapped[List["Message"]] = relationship(back_populates="user")
+    message: Mapped[List["Message"]] = relationship(
+        back_populates="user", cascade="all,delete-orphan"
+    )
     chat_id: Mapped[int] = mapped_column(
-        ForeignKey("chatroom_table.id"), index=True, cascade="all, delete-orphan"
+        ForeignKey("chatroom_table.id"), index=True, nullable=True
     )
     chatroom: Mapped["Chatroom"] = relationship(back_populates="user")
 
@@ -32,9 +34,12 @@ class Chatroom(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(30))
 
-    user: Mapped[List["User"]] = relationship(back_populates="chatroom")
-    chat_message: Mapped[List["Message"]] = relationship(back_populates="chatroom")
-
+    user: Mapped[List["User"]] = relationship(
+        back_populates="chatroom", cascade="all,delete-orphan"
+    )
+    chat_message: Mapped[List["Message"]] = relationship(
+        back_populates="chatroom", cascade="all,delete-orphan"
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
@@ -48,13 +53,9 @@ class Message(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
 
-    chat_id: Mapped[int] = mapped_column(
-        ForeignKey("chatroom_table.id"), index=True, cascade="all,delete-orphan"
-    )
+    chat_id: Mapped[int] = mapped_column(ForeignKey("chatroom_table.id"), index=True)
     chatroom: Mapped["Chatroom"] = relationship(back_populates="chat_message")
-    user_id: Mapped[int] = mapped_column(
-        ForeignKey("user_table.id"), index=True, cascade="all,delete-orphan"
-    )
+    user_id: Mapped[int] = mapped_column(ForeignKey("user_table.id"), index=True)
     user: Mapped["User"] = relationship(back_populates="message")
     content: Mapped[str]
     created_at: Mapped[datetime] = mapped_column(
