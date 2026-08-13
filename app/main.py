@@ -1,12 +1,13 @@
 from contextlib import asynccontextmanager
 from datetime import timedelta
 from fastapi import Depends, FastAPI, HTTPException, WebSocket, WebSocketDisconnect
-from fastapi.responses import HTMLResponse
+from pydantic import HttpUrl
 from sqlalchemy import select
-from app.dependencies.dependecies import get_chatroom
+from sqlalchemy.engine import result
+from sqlalchemy.orm import query
 from .database.setup import create_db, dispose, SessionDependency
-from .database.models import User
-from .database.schemas import UserCreate, UserRead, Token
+from .database.models import User, Chatroom, Message
+from .database.schemas import UserCreate, UserRead, Token, ChatroomCreate, ChatroomRead
 from fastapi import status
 from .database.auth import (
     ACCESS_TOKEN_EXPIRE_MINUTES,
@@ -80,6 +81,37 @@ async def register_user(user: UserCreate, session: SessionDependency):
     return new_user
 
 
+@app.post("/chatroom", response_model=ChatroomRead, status_code=201)
+async def create_chatroom(session: SessionDependency, chatroom: ChatroomCreate):
+    query = select(Chatroom).where(Chatroom.name == chatroom.name)
+    result = await session.execute(query)
+    print(result)
+    existing_chatroom = result.scalar_one_or_none()
+
+    if existing_chatroom:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Chatroom already exists"
+        )
+
+    new_chatroom = Chatroom(name=chatroom.name)
+
+    session.add(new_chatroom)
+    await session.commit()
+    await session.refresh(new_chatroom)
+    return new_chatroom
+
+
+# @app.patch("/users/{user_id}", response_model=UserRead, status_code=201)
+# async def update_user(session: SessionDependency, user_id: int, user: UserCreate):
+#     query = select(User).where(User.id == user_id)
+#     result = await session.execute(query)
+#
+#     if not existing_user:
+#         raise HTTPException(
+#             status_code=status.HTTP_400_BAD_REQUEST, detail="User does not exist"
+#         )
+
+
 @app.get("/")
 async def login_page(request: Request):
     return templates.TemplateResponse(request, "login.html")
@@ -105,17 +137,6 @@ class ConnectionManager:
                 dead.append(connection)
         for connection in dead:
             self.active_connections.remove(connection)
-
-
-class User_Handler:
-
-    def add_user_to_chatroom(
-        self, session: SessionDependency, username: str, chatroom: str
-    ) -> User | None:
-        user = get_user(session, username)
-        chat = get_chatroom(session, chatroom)
-        if not chat and user:
-            return None
 
 
 manager = ConnectionManager()
@@ -151,3 +172,6 @@ async def websocket_endpoint(websocket: WebSocket, session: SessionDependency):
             await manager.send_broadcast_message(data)
     except WebSocketDisconnect:
         await manager.disconnect(websocket)
+        await manager.send_broadcast_message(
+            f"{current_user.username} has disconnected"
+        )

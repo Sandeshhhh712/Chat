@@ -1,3 +1,5 @@
+from typing import List
+
 from pydantic import BaseModel
 from datetime import datetime
 
@@ -17,3 +19,13 @@ class UserRead(BaseModel):
 class Token(BaseModel):
     access_token: str
     token_type: str
+
+
+class ChatroomCreate(BaseModel):
+    name: str
+
+
+class ChatroomRead(BaseModel):
+    id: int
+    name: str
+    created_at: datetime

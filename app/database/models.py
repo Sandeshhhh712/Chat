@@ -1,4 +1,4 @@
-from sqlalchemy import ForeignKey, func, String, DateTime
+from sqlalchemy import ForeignKey, Nullable, func, String, DateTime, null
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from datetime import datetime
 from .setup import Base
